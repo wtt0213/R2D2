@@ -1,16 +1,25 @@
 <component name="ProjectDictionaryState">
   <dictionary name="wzqin">
     <words>
+      <w>bilinear</w>
       <w>conv</w>
       <w>cuda</w>
       <w>cudnn</w>
       <w>curchan</w>
       <w>gpus</w>
+      <w>idxs</w>
       <w>imgs</w>
       <w>inchan</w>
+      <w>iscuda</w>
+      <w>keypoints</w>
+      <w>maxima</w>
       <w>mchan</w>
+      <w>multiscale</w>
       <w>outd</w>
+      <w>outpath</w>
+      <w>relthr</w>
       <w>relu</w>
+      <w>repthr</w>
       <w>softmax</w>
       <w>softplus</w>
     </words>

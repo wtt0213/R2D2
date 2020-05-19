@@ -28,10 +28,10 @@ class BaseNet(nn.Module):
 
     def normalize(self, x, uReliability, uRepeatability):
         """
-        :param x: 输入的像素级别的描述符 [n,128,h,w]
-        :param uReliability:  pixel-wise reliable 置信度 [n,1,h,w]
-        :param uRepeatability: pixel-wise repeatable 置信度 [n,1,h,w]
-        :return:
+        :param x: 输入的像素级别的描述符 [batch,128,h,w]
+        :param uReliability:  pixel-wise reliable 置信度 [batch,1,h,w]
+        :param uRepeatability: pixel-wise repeatable 置信度 [batch,1,h,w]
+        :return: 返回的尺寸2个都是 [batch,1,H,W]
         """
         return dict(descriptors=F.normalize(x, p=2, dim=1),
                     repeatability=self.softmax(uRepeatability),
@@ -44,6 +44,8 @@ class BaseNet(nn.Module):
         res = [self.forward_one(img) for img in imgs]
         # 把list中的所有dict全部融合为一个,一个k对应着把每个的图片输出的结果中的k项放在一个列表中
         res = {k: [r[k] for r in res if k in r] for k in {k for r in res for k in r}}
+        # 这里返回的是一个列表，要注意了，后面根据索引调用的时候要取第一个，
+        # 比如res['reliability'][0]才是所需
         return dict(res, imgs=imgs, **kw)
 
 
@@ -136,9 +138,10 @@ class Quad_L2Net_ConfCFS (Quad_L2Net):
     """
     def __init__(self, **kw):
         Quad_L2Net.__init__(self, **kw)
-        # reliability classifier
+        # reliability classifier,返回的尺寸是 [batch,2,H,W]
         self.clf = nn.Conv2d(self.out_dim, 2, kernel_size=1)
-        # repeatability classifier 这里是1就有点尴尬了……本来应该是2的，作者写错了
+        # repeatability classifier ,返回的尺寸是 [batch,1,H,W]
+        # 这里是1就有点尴尬了……本来应该是2的，作者写错了
         self.sal = nn.Conv2d(self.out_dim, 1, kernel_size=1)
 
     def forward_one(self, x):
