@@ -1,15 +1,20 @@
 <component name="ProjectDictionaryState">
   <dictionary name="wzqin">
     <words>
+      <w>ampl</w>
       <w>bilinear</w>
       <w>conv</w>
       <w>cuda</w>
       <w>cudnn</w>
       <w>curchan</w>
       <w>gpus</w>
+      <w>homography</w>
       <w>idxs</w>
       <w>imgs</w>
+      <w>imsize</w>
       <w>inchan</w>
+      <w>instanciate</w>
+      <w>instanciated</w>
       <w>iscuda</w>
       <w>keypoints</w>
       <w>maxima</w>
@@ -17,11 +22,13 @@
       <w>multiscale</w>
       <w>outd</w>
       <w>outpath</w>
+      <w>persp</w>
       <w>relthr</w>
       <w>relu</w>
       <w>repthr</w>
       <w>softmax</w>
       <w>softplus</w>
+      <w>trfs</w>
     </words>
   </dictionary>
 </component>
