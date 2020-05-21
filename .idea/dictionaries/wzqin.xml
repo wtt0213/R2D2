@@ -1,12 +1,16 @@
 <component name="ProjectDictionaryState">
   <dictionary name="wzqin">
     <words>
+      <w>aflow</w>
       <w>ampl</w>
       <w>bilinear</w>
       <w>conv</w>
+      <w>corres</w>
       <w>cuda</w>
       <w>cudnn</w>
       <w>curchan</w>
+      <w>datasets</w>
+      <w>fname</w>
       <w>gpus</w>
       <w>homography</w>
       <w>idxs</w>
@@ -20,6 +24,8 @@
       <w>maxima</w>
       <w>mchan</w>
       <w>multiscale</w>
+      <w>nimg</w>
+      <w>npairs</w>
       <w>outd</w>
       <w>outpath</w>
       <w>persp</w>
