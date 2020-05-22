@@ -40,12 +40,14 @@ class CatDataset (Dataset):
         offsets = [0]
         for db in datasets:
             offsets.append(db.nimg)
+        # 具化每一个dataset的第一个图片在总set中的偏移
         self.offsets = np.cumsum(offsets)
         self.nimg = self.offsets[-1]
         self.root = None
 
     def which(self, i):
         # pos 是i在offset中的最后一个小于等于i的位置
+        # 这里就是确定是在那个子dataset中
         pos = np.searchsorted(self.offsets, i, side='right') - 1
         assert pos < self.nimg, 'Bad image index %d >= %d' % (i, self.nimg)
         return pos, i - self.offsets[pos]
@@ -54,7 +56,7 @@ class CatDataset (Dataset):
         b, i = self.which(i)
         return self.datasets[b].get_key(i)
 
-    def get_filename(self, i):
+    def get_filename(self, i, root=None):
         b, i = self.which(i)
         return self.datasets[b].get_filename(i)
 

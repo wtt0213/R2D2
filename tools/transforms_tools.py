@@ -140,7 +140,7 @@ def persp_apply(mat, pts):
     assert isinstance(pts, np.ndarray)
     assert pts.shape[-1] == 2
     mat = np.float32(mat + (1,)).reshape(3, 3)
-    # 如果只有一个点 即pts = 1*2
+    # 这个是针对corres矩阵设定，因为metadata['corres']输入的是位置对应的点，比如原图的第一个点对应
     if pts.ndim == 1:
         # 这里要保证pt也是一维的，用ravel处理一下
         pt = np.dot(pts, mat[:, :2].T).ravel() + mat[:, 2]

@@ -1,4 +1,5 @@
-import os, pdb
+import os
+import pdb
 import numpy as np
 from PIL import Image
 
@@ -16,17 +17,20 @@ def is_pair(x):
 
 
 class PairDataset(Dataset):
+
     def __init__(self):
         Dataset.__init__(self)
         self.npairs = 0
 
     def get_filename(self, img_idx, root=None):
-        if is_pair(img_idx):  # if img_idx is a pair of indices, we return a pair of filenames
+        if is_pair(
+                img_idx):  # if img_idx is a pair of indices, we return a pair of filenames
             return tuple(Dataset.get_filename(self, i, root) for i in img_idx)
         return Dataset.get_filename(self, img_idx, root)
 
     def get_image(self, img_idx):
-        if is_pair(img_idx):  # if img_idx is a pair of indices, we return a pair of images
+        if is_pair(
+                img_idx):  # if img_idx is a pair of indices, we return a pair of images
             return tuple(Dataset.get_image(self, i) for i in img_idx)
         return Dataset.get_image(self, img_idx)
 
@@ -73,6 +77,9 @@ class PairDataset(Dataset):
         res += '\n  root: %s...\n' % self.root
         return res
 
+    def get_key(self, img_idx):
+        raise NotImplementedError()
+
     @staticmethod
     def _flow2png(flow, path):
         flow = np.clip(np.around(16 * flow), -2 ** 15, 2 ** 15 - 1)
@@ -85,14 +92,21 @@ class PairDataset(Dataset):
         try:
             flow = np.asarray(Image.open(path)).view(np.int16)
             return np.float32(flow) / 16
-        except:
+        except BaseException:
             raise IOError("Error loading flow for %s" % path)
 
 
 class SyntheticPairDataset (PairDataset):
+    """
+    对输入图像进行指定的 scale和 distort
+    """
     def __init__(self, dataset, scale='', distort=''):
         PairDataset.__init__(self)
-        assert isinstance(dataset, Dataset) and not isinstance(dataset, PairDataset)
+        assert isinstance(
+            dataset,
+            Dataset) and not isinstance(
+            dataset,
+            PairDataset)
         self.dataset = dataset
         self.npairs = dataset.nimg
         self.get_image = dataset.get_image
@@ -103,7 +117,11 @@ class SyntheticPairDataset (PairDataset):
         self.scale = instanciate_transformation(scale)
 
     def attach_dataset(self, dataset):
-        assert isinstance(dataset, Dataset) and not isinstance(dataset, PairDataset)
+        assert isinstance(
+            dataset,
+            Dataset) and not isinstance(
+            dataset,
+            PairDataset)
         self.dataset = dataset
         self.npairs = dataset.nimg
         self.get_image = dataset.get_image
@@ -134,9 +152,11 @@ class SyntheticPairDataset (PairDataset):
             xy = np.mgrid[0:H, 0:W][::-1].reshape(2, H * W).T
             # 输出的还是(n,2)，只不过是原始点的对应点
             aflow = np.float32(persp_apply(trf, xy).reshape(H, W, 2))
+            # 注意这里储存的格式是(H,W,2)
             meta['flow'] = aflow - xy.reshape(H, W, 2)
             meta['aflow'] = aflow
         if 'homography' in output:
+            # 这里homograph存的是3*3，不是1*8
             meta['homography'] = np.float32(trf + (1,)).reshape(3, 3)
 
         return scaled_image, scaled_and_distorted_image['img'], meta
@@ -148,3 +168,136 @@ class SyntheticPairDataset (PairDataset):
         res += '\n  Scale: %s' % (repr(self.scale).replace('\n', ''))
         res += '\n  Distort: %s' % (repr(self.distort).replace('\n', ''))
         return res + '\n'
+
+
+class TransformedPairs (PairDataset):
+    """
+    对输入的SyntheticPairDataset进行指定的trf变换
+    """
+    def __init__(self, dataset, trf=''):
+        super().__init__()
+        self.dataset = dataset
+        self.nimg = dataset.nimg
+        self.npairs = dataset.npairs
+        self.get_image = dataset.get_image
+        self.get_key = dataset.get_key
+        self.get_filename = dataset.get_filename
+        self.root = None
+        self.trf = instanciate_transformation(trf)
+
+    def attach_dataset(self, dataset):
+        assert isinstance(dataset, PairDataset)
+        self.dataset = dataset
+        self.nimg = dataset.nimg
+        self.npairs = dataset.npairs
+        self.get_image = dataset.get_image
+        self.get_key = dataset.get_key
+        self.get_filename = dataset.get_filename
+        self.root = None
+
+    def get_pair(self, i, output=''):
+        img_a, img_b_, metadata = self.dataset.get_pair(i, output)
+        img_b = self.trf({'img': img_b_, 'persp': (1, 0, 0, 0, 1, 0, 0, 0)})
+        trf = img_b['persp']
+
+        # 将对应的光流矩阵也进行变换
+        if 'aflow' in metadata or 'flow' in metadata:
+            aflow = metadata['aflow']
+            aflow[:] = persp_apply(trf, aflow.reshape(-1, 2)).reshape(aflow.shape)
+            W, H = img_a.size
+            flow = metadata['flow']
+            mgrid = np.mgrid[0:H, 0:W][::-1].transpose(1, 2, 0).astype(np.float32)
+            flow[:] = aflow - mgrid
+
+        if 'corres' in metadata:
+            # TODO 没有搞清楚corres的维度大小
+            corres = metadata['corres']
+            corres[:, 1] = persp_apply(trf, corres[:, 1])
+
+        if 'homography' in metadata:
+            # p_b = homography * p_a
+            trf_ = np.float32(trf + (1,)).reshape(3, 3)
+            metadata['homography'] = np.float32(trf_ @ metadata['homography'])
+
+        return img_a, img_b['img'], metadata
+
+    def __repr__(self):
+        res = 'Transformed Pairs from %s\n' % type(self.dataset).__name__
+        res += '  %d images and pairs' % self.npairs
+        res += '\n  root: %s...' % self.dataset.root
+        res += '\n  transform: %s' % (repr(self.trf).replace('\n', ''))
+        return res + '\n'
+
+
+class CatPairDataset (CatDataset):
+    """
+    合并 dataset
+    """
+    def __init__(self, *datasets):
+        CatDataset.__init__(self, *datasets)
+        pair_offsets = [0]
+        for db in datasets:
+            pair_offsets.append(db.npairs)
+        self.pair_offsets = np.cumsum(pair_offsets)
+        # 总个数
+        self.npairs = self.pair_offsets[-1]
+
+    def __len__(self):
+        return self.npairs
+
+    def __repr__(self):
+        fmt_str = "CatPairDataset("
+        for db in self.datasets:
+            fmt_str += str(db).replace("\n", " ") + ', '
+        return fmt_str[:-2] + ')'
+
+    def pair_which(self, i):
+        pos = np.searchsorted(self.pair_offsets, i, side='right') - 1
+        assert pos < self.npairs, 'Bad pair index %d >= %d' % (i, self.npairs)
+        # 返回在的子集的组数和在组内的数
+        return pos, i - self.pair_offsets[pos]
+
+    def pair_call(self, func, i, *args, **kwargs):
+        b, j = self.pair_which(i)
+        return getattr(self.datasets[b], func)(j, *args, **kwargs)
+
+    def get_pair(self, i, output=()):
+        b, i = self.pair_which(i)
+        return self.datasets[b].get_pair(i, output)
+
+    def get_flow_filename(self, pair_idx, *args, **kwargs):
+        return self.pair_call('get_flow_filename', pair_idx, *args, **kwargs)
+
+    def get_mask_filename(self, pair_idx, *args, **kwargs):
+        return self.pair_call('get_mask_filename', pair_idx, *args, **kwargs)
+
+    def get_corres_filename(self, pair_idx, *args, **kwargs):
+        return self.pair_call('get_corres_filename', pair_idx, *args, **kwargs)
+
+
+class StillPairDataset (PairDataset):
+    """ A dataset of 'still' image pairs.
+        By overloading a normal image dataset, it appends the get_pair(i) function
+        that serves trivial image pairs (img1, img2) where img1 == img2 == get_image(i).
+    """
+    def get_pair(self, pair_idx, output=()):
+        if isinstance(output, str): output = output.split()
+        img1, img2 = map(self.get_image, self.image_pairs[pair_idx])
+
+        W, H = img1.size
+        sx = img2.size[0] / float(W)
+        sy = img2.size[1] / float(H)
+
+        meta = {}
+        if 'aflow' in output or 'flow' in output:
+            mgrid = np.mgrid[0:H, 0:W][::-1].transpose(1,2,0).astype(np.float32)
+            meta['aflow'] = mgrid * (sx,sy)
+            meta['flow'] = meta['aflow'] - mgrid
+
+        if 'mask' in output:
+            meta['mask'] = np.ones((H,W), np.uint8)
+
+        if 'homography' in output:
+            meta['homography'] = np.diag(np.float32([sx, sy, 1]))
+
+        return img1, img2, meta
