@@ -105,6 +105,7 @@ class PairLoader:
         # scale在一定的范围内,[H*W]
         scale = np.sqrt(np.clip(np.abs(dx[1] * dy[0] - dx[0] * dy[1]), 1e-16, 1e16))
 
+        # 论文中所描述的N，即窗口大小
         accu2 = np.zeros((16, 16), bool)
         Q = lambda x, w: \
             np.int32(16 * (x - w.start) / (w.stop - w.start))
@@ -180,6 +181,7 @@ class PairLoader:
             # 每次迭代重新初始化accu2
             accu2[:] = False
             # y2[valid]会拿到y2中满足范围的纵坐标值
+            # 这里通过Q归一化将坐标放在accu2(16*16)尺度中
             accu2[Q(y2[valid], win2[0]), Q(x2[valid], win2[1])] = True
             score2 = accu2.mean()
 
@@ -190,7 +192,95 @@ class PairLoader:
             if score > best[0]:
                 best = score, win1, win2
 
-        # TODO
+        # 找不到窗口
+        if None in best:
+            img_a = np.zeros(output_size_a[::-1] + (3,), dtype=np.uint8)
+            img_b = np.zeros(output_size_b[::-1] + (3,), dtype=np.uint8)
+            aflow = np.nan * np.ones((2,) + output_size_a[::-1], dtype=np.float32)
+            homography = np.nan * np.ones((3, 3), dtype=np.float32)
+        else:
+            # 由于从一个框截取出来变成一个新的图片，所以位置对应信息要改变
+            # 比如截取框的位置img1[2:4,2:4] img2[3:5,3:5] 那么corres((2,2)(3,3))要变成((0,0)(0,0))
+            # aflow，homograph等同理
+            win1, win2 = best[1:]
+            img_a = img_a[win1]
+            img_b = img_b[win2]
+            mask = mask[win1]
+            aflow = aflow[win1] - np.float32([[[win2[1].start, win2[0].start]]])
+            # 将mask中0对应的点映射为nan
+            aflow[~mask.view(bool)] = np.nan
+            # 转换为 (2,H,W)
+            aflow = aflow.transpose(2, 0, 1)
+
+            if corres is not None:
+                corres[:, 0] -= (win1[1].start, win1[0].start)
+                corres[:, 1] -= (win2[1].start, win2[0].start)
+
+            if homography is not None:
+                # 这里变化比较巧妙
+                # win1这里要加是因为从[0,0]需要变到[win1[1].start,win1[0].start]才能真正找到对应的win2的位置
+                # win2要减是因为经过win1加后索引到[win2[1].start,win2[0].start]，但是要归到0，0位置，因为上面
+                # 说了要把窗口裁剪为一个新的图片
+                trans1 = np.eye(3, dtype=np.float32)
+                trans1[:2, 2] = (win1[1].start, win1[0].start)
+                trans2 = np.eye(3, dtype=np.float32)
+                trans2[:2, 2] = (-win2[1].start, -win2[0].start)
+                homography = trans2 @ homography @ trans1
+                homography /= homography[2, 2]
+
+            # 要考虑裁剪后的尺寸变化，要rescale到指定的尺度，然后再把上面那些东西都变化一下
+            # 先看img_a
+            if img_a.shape[:2][::-1] != output_size_a:
+                # 缩放比例
+                sx, sy = (np.float32(output_size_a) - 1) / (np.float32(img_a.shape[:2][::-1]) - 1)
+                img_a = np.asarray(Image.fromarray(img_a).resize(output_size_a, Image.ANTIALIAS))
+                # 这里mask要用nearest，保证mask还是映射有用的点
+                mask = np.asarray(Image.fromarray(mask).resize(output_size_a, Image.NEAREST))
+                # 缩放aflow 这里注意和后面的缩放img_b对比，缩放img_a的话就放大aflow就行，里面对应值不用变
+                # 如果缩放img_b，那么aflow对应位置要乘以2
+                afx = Image.fromarray(aflow[0]).resize(output_size_a, Image.NEAREST)
+                afy = Image.fromarray(aflow[1]).resize(output_size_a, Image.NEAREST)
+                aflow = np.stack((np.float32(afx), np.float32(afy)))
+
+                # 缩放corres 这个直接缩放对应关系就行，注意改的是0维 即img_a坐标
+                if corres is not None:
+                    corres[:, 0] *= (sx, sy)
+                # 这里缩放img_a要除法(可以想象做乘法然后再除下去得到的位置关系一样)
+                # 下面缩放img_b要乘法(相当于同样的变换到了缩放后的位置)
+                if homography is not None:
+                    homography = homography @ np.diag(np.float32([1 / sx, 1 / sy, 1]))
+                    homography /= homography[2, 2]
+
+            if img_b.shape[:2][::-1] != output_size_b:
+                sx, sy = (np.float32(output_size_b) - 1) / (np.float32(img_b.shape[:2][::-1]) - 1)
+                img_b = np.asarray(Image.fromarray(img_b).resize(output_size_b, Image.ANTIALIAS))
+
+                aflow *= [[[sx]], [[sy]]]
+
+                if corres is not None:
+                    corres[:, 1] *= (sx, sy)
+
+                if homography is not None:
+                    homography = np.diag(np.float32([sx, sy, 1])) @ homography
+                    homography /= homography[2, 2]
+
+        assert aflow.dtype == np.float32, pdb.set_trace()
+        assert homography is None or homography.dtype == np.float32, pdb.set_trace()
+
+        # 最后对flow处理一下，因为flow可以用aflow得来，所以上面一直没有处理
+        if 'flow' in self.what:
+            H, W = img_a.shape[:2]
+            mgrid = np.mgrid[0:H, 0:W][::-1].astype(np.float32)
+            flow = aflow - mgrid
+
+        result = dict(img1=self.norm(img_a), img2=self.norm(img_b))
+        for what in self.what:
+            try:
+                result[what] = eval(what)
+            except NameError:
+                pass
+        return result
+
 
 
 def collate(batch, _use_shared_memory=True):
@@ -231,7 +321,7 @@ def collate(batch, _use_shared_memory=True):
         return batch
     elif isinstance(batch[0], dict):
         return {key: collate([d[key] for d in batch]) for key in batch[0]}
-    elif isinstance(batch[0], (tuple,list)):
+    elif isinstance(batch[0], (tuple, list)):
         transposed = zip(*batch)
         return [collate(samples) for samples in transposed]
 
@@ -250,4 +340,3 @@ def tensor2img(tensor, model=None):
     res = np.uint8(np.clip(255 * ((tensor.transpose(1, 2, 0) * std) + mean), 0, 255))
     from PIL import Image
     return Image.fromarray(res)
-

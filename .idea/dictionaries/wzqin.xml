@@ -5,6 +5,7 @@
       <w>aflow</w>
       <w>ampl</w>
       <w>bilinear</w>
+      <w>confs</w>
       <w>conv</w>
       <w>corres</w>
       <w>cuda</w>
@@ -23,19 +24,29 @@
       <w>iscuda</w>
       <w>keypoints</w>
       <w>maxima</w>
+      <w>maxpool</w>
       <w>mchan</w>
       <w>mgrid</w>
       <w>multiscale</w>
       <w>nimg</w>
       <w>npairs</w>
+      <w>nscores</w>
       <w>outd</w>
       <w>outpath</w>
+      <w>perimage</w>
       <w>persp</w>
+      <w>precompute</w>
+      <w>pscores</w>
+      <w>qconf</w>
+      <w>qfeat</w>
       <w>relthr</w>
       <w>relu</w>
       <w>repthr</w>
       <w>softmax</w>
       <w>softplus</w>
+      <w>subd</w>
+      <w>subq</w>
+      <w>todevice</w>
       <w>trfs</w>
     </words>
   </dictionary>
