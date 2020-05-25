@@ -74,7 +74,7 @@ def extract_multiscale(net, img, detector, scale_f=2 ** 0.25,
     assert B == 1 and three == 3, "should be a batch with a single RGB image"
     assert max_scale <= 1
     # cur_scale_f
-    s = 1
+    s = 1.0
 
     X, Y, S, C, Q, D = [], [], [], [], [], []
 
@@ -94,7 +94,7 @@ def extract_multiscale(net, img, detector, scale_f=2 ** 0.25,
             reliability = res['reliability'][0]
             repeatability = res['repeatability'][0]
             # 得到局部极大值的位置
-            x, y = detector(**res)
+            y, x = detector(**res)
             # 将对应位置的置信度和提取出来，假设点有n个，c和q都是torch.size([n])
             c = reliability[0, 0, y, x]
             q = repeatability[0, 0, y, x]

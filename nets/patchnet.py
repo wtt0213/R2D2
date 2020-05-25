@@ -96,7 +96,7 @@ class PatchNet(BaseNet):
             x = op(x)
         # 这里只输出descriptor X，源码中此处有问题，调用的是self.normalize，这个需要输入三个参数
         # 即也会包括R和S
-        return F.normalize(x, p=2, dim=1)
+        return F.normalize(x)
 
 
 class L2_Net(PatchNet):
