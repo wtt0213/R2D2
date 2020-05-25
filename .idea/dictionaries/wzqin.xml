@@ -4,10 +4,12 @@
       <w>accu</w>
       <w>aflow</w>
       <w>ampl</w>
+      <w>aploss</w>
       <w>bilinear</w>
       <w>confs</w>
       <w>conv</w>
       <w>corres</w>
+      <w>cosim</w>
       <w>cuda</w>
       <w>cudnn</w>
       <w>curchan</w>
@@ -39,9 +41,11 @@
       <w>pscores</w>
       <w>qconf</w>
       <w>qfeat</w>
+      <w>quantizer</w>
       <w>relthr</w>
       <w>relu</w>
       <w>repthr</w>
+      <w>sali</w>
       <w>softmax</w>
       <w>softplus</w>
       <w>subd</w>
